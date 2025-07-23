@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and tracking
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  submissions  Submission[]
+  // This will store the ID from your auth provider (e.g., Clerk)
+  externalId   String        @unique
+}
+
+// Problem model for the DSA questions
+model Problem {
+  id              Int           @id @default(autoincrement())
+  title           String
+  description     String
+  difficulty      Difficulty    @default(MEDIUM)
+  tags            String[]      // e.g., ["arrays", "dynamic-programming"]
+  submissions     Submission[]
+  createdAt       DateTime      @default(now())
+}
+
+// Enum for problem difficulty levels
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+// Submission model to track user progress on each problem
+model Submission {
+  id                String    @id @default(cuid())
+  problemId         Int
+  problem           Problem   @relation(fields: [problemId], references: [id])
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  
+  // Phase tracking to manage the 6-step workflow
+  currentPhase      Int       @default(1) // 1 through 6
+  isCompleted       Boolean   @default(false)
+
+  // JSON fields to store data for each phase
+  phase1_understanding      Json?     // { userText: "...", aiFeedback: "..." }
+  phase2_testCases          Json?     // { testCases: [{input: "...", output: "..."}], aiFeedback: "..." }
+  phase3_algorithm          Json?     // { userAlgorithm: "...", aiFeedback: "..." }
+  phase4_code               Json?     // { language: "python", code: "...", executionResults: {...} }
+  phase5_review             Json?     // { timeComplexity: "O(n)", spaceComplexity: "O(1)", aiHints: "..." }
+  phase6_aiFeedback         Json?     // { summary: "...", strengths: [], weaknesses: [], similarProblems: [] }
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Ensures a user can only have one submission entry per problem
+  @@unique([userId, problemId])
+}

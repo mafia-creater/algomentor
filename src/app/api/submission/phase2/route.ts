@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     {"feedback": "You've done a great job covering the basic cases.", "suggestedEdgeCases": ["An empty array", "An array with negative numbers"]}`;
     
     // --- AI Call and Response Parsing ---
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash"});
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let aiResultText = response.text();

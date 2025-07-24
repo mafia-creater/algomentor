@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     Example response format:
     {"feedback": "This is a good start. Your logic for iterating through the array is correct. Have you considered what happens if the input array is empty?"}`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let aiResultText = response.text();

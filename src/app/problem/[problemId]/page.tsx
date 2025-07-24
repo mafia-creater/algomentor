@@ -2,19 +2,27 @@ import prisma from "@/lib/prisma";
 import ProblemInterface from "./problem-interface"; // Import the client component
 
 // This is an async Server Component
+// In your server component
 export default async function SingleProblemPage({ params }: { params: { problemId: string } }) {
-  
-  // Fetch the specific problem from the database
-  const problem = await prisma.problem.findUnique({
-    where: {
-      id: parseInt(params.problemId), // This is safe in a Server Component
-    },
-  });
+  try {
+    const problemId = parseInt(params.problemId);
+    
+    // Validate the ID is a valid number
+    if (isNaN(problemId)) {
+      return <div>Invalid problem ID</div>;
+    }
 
-  if (!problem) {
-    return <div>Problem not found!</div>;
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId },
+    });
+
+    if (!problem) {
+      return <div>Problem not found!</div>;
+    }
+
+    return <ProblemInterface problem={problem} />;
+  } catch (error) {
+    console.error('Error fetching problem:', error);
+    return <div>Error loading problem. Please try again.</div>;
   }
-
-  // Render the interactive client component and pass the problem data to it
-  return <ProblemInterface problem={problem} />;
 }

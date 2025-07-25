@@ -9,17 +9,48 @@ async function main() {
     // Create sample problems
     const problems = [
         {
-            title: 'Two Sum',
-            description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`. You may assume that each input would have exactly one solution, and you may not use the same element twice.',
+            title: "Two Sum",
+            description: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
             difficulty: Difficulty.EASY,
-            tags: ['array', 'hash-table'],
+            tags: ["Array", "Hash Table"],
+            functionName: "twoSum",
+            constraints: [
+                "2 <= nums.length <= 10^4",
+                "-10^9 <= nums[i] <= 10^9",
+                "-10^9 <= target <= 10^9",
+                "Only one valid answer exists."
+            ],
+            hints: [
+                "Try using a hash map to store the complement of each number.",
+                "For each number, check if its complement exists in the hash map."
+            ],
             defaultTestCases: [
-                { input: "2 7 11 15\n9", output: "[0,1]" },
-                { input: "3 2 4\n6", output: "[1,2]" }
+                {
+                    input: "[2,7,11,15]\n9",
+                    output: "[0,1]",
+                    explanation: "Because nums[0] + nums[1] == 9, we return [0, 1]."
+                },
+                {
+                    input: "[3,2,4]\n6",
+                    output: "[1,2]",
+                    explanation: "Because nums[1] + nums[2] == 6, we return [1, 2]."
+                }
             ],
             codeScaffold: {
-                python: "def two_sum(nums, target):\n  # Write your code here\n  pass",
-                javascript: "function twoSum(nums, target) {\n  // Write your code here\n}"
+                python: `def twoSum(nums, target):
+    # Write your solution here
+    pass`,
+                javascript: `function twoSum(nums, target) {
+    // Write your solution here
+}`,
+                java: `public int[] twoSum(int[] nums, int target) {
+    // Write your solution here
+    return new int[0];
+}`,
+                cpp: `vector<int> twoSum(vector<int>& nums, int target) {
+    // Write your solution here
+    return {};
+}`
             }
         },
         {

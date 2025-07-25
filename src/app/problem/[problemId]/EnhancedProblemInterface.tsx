@@ -1,9 +1,5 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import Phase1 from "./Phase1";
-import Phase2 from "./Phase2";
-import Phase3 from "./Phase3";
-import Phase4 from "./Phase4";
 import type { Problem, Submission } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Editor from '@monaco-editor/react';
+import EnhancedPhase4 from "./Phase4";
 
 type TestCase = {
   input: string;
@@ -94,14 +91,14 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
   const [understanding, setUnderstanding] = useState('');
   const [phase1Feedback, setPhase1Feedback] = useState('');
   const [isPhase1Loading, setIsPhase1Loading] = useState(false);
-  
+
   // --- Phase 2 State ---
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [currentInput, setCurrentInput] = useState('');
   const [currentOutput, setCurrentOutput] = useState('');
   const [phase2Feedback, setPhase2Feedback] = useState<{ feedback: string, suggestedEdgeCases: string[] } | null>(null);
   const [isPhase2Loading, setIsPhase2Loading] = useState(false);
-  
+
   // --- Phase 3 State ---
   const [algorithmText, setAlgorithmText] = useState('');
   const [phase3Feedback, setPhase3Feedback] = useState('');
@@ -119,9 +116,8 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
 
   // Initialize code from scaffold when problem or language changes, or from initialSubmission
   useEffect(() => {
-    // Safely get code and language from initialSubmission if present
-    if (initialSubmission && typeof (initialSubmission as any).code === 'string') {
-      setCode((initialSubmission as any).code);
+    if (initialSubmission && typeof initialSubmission.code === 'string') {
+      setCode(initialSubmission.code);
     } else if (
       problem.codeScaffold &&
       typeof problem.codeScaffold === 'object' &&
@@ -131,8 +127,8 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
     } else {
       setCode('# Write your code here...');
     }
-    if (initialSubmission && typeof (initialSubmission as any).language === 'string') {
-      setLanguage((initialSubmission as any).language);
+    if (initialSubmission && typeof initialSubmission.language === 'string') {
+      setLanguage(initialSubmission.language);
     }
   }, [problem, language, initialSubmission]);
 
@@ -185,7 +181,7 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
       setCurrentOutput('');
     }
   };
-  
+
   const handleRemoveTestCase = (index: number) => {
     setTestCases(testCases.filter((_, i) => i !== index));
   };
@@ -226,13 +222,13 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
   const runCode = async (testCasesToRun?: TestCase[]) => {
     setIsRunning(true);
     setTestResults([]);
-    
+
     // Use default test cases from the prop, or the custom ones provided
     const casesToExecute = testCasesToRun || [
       ...(problem.defaultTestCases as TestCase[] || []),
       ...testCases
     ];
-    
+
     try {
       const results = await Promise.all(
         casesToExecute.map(async (testCase, index) => {
@@ -246,11 +242,11 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
               functionName: problem.functionName
             })
           });
-          
+
           const result = await response.json();
           const actualOutput = (result.stdout || '').trim();
           const expectedOutput = testCase.output.trim();
-          
+
           return {
             testCase,
             result,
@@ -261,12 +257,12 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
           };
         })
       );
-      
+
       setTestResults(results);
-      
+
       const allPassed = results.every(r => r.isCorrect);
       const hasErrors = results.some(r => r.result.status.id > 3); // Any status > 3 is an error
-      
+
       if (hasErrors) {
         setSubmissionStatus('error');
       } else if (allPassed) {
@@ -275,7 +271,7 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
       } else {
         setSubmissionStatus('wrong');
       }
-      
+
     } catch (error) {
       console.error('Execution error:', error);
       setSubmissionStatus('error');
@@ -332,15 +328,11 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
   };
 
   const resetCode = () => {
-    if (
-      problem.codeScaffold &&
-      typeof problem.codeScaffold === 'object' &&
-      typeof (problem.codeScaffold as Record<string, string>)[language] === 'string'
-    ) {
-      setCode((problem.codeScaffold as Record<string, string>)[language]);
+    if (problem.codeScaffold && typeof problem.codeScaffold === 'object' && problem.codeScaffold[language]) {
+      setCode(problem.codeScaffold[language]);
     }
   };
-  
+
   // --- Render ---
   return (
     <div className="min-h-screen bg-slate-50">
@@ -369,6 +361,7 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
               </Select>
             )}
           </div>
+
           <div className="mt-4 space-y-2">
             <div className="flex justify-between items-center text-sm font-medium">
               <span>Progress</span>
@@ -376,6 +369,7 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
             </div>
             <Progress value={progressPercentage} className="h-2" />
           </div>
+
           {/* Phase Navigation */}
           <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
             {Object.entries(PHASE_CONFIG).map(([phase, config]) => {
@@ -385,15 +379,14 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
               const Icon = config.icon;
               return (
                 <div key={phase} className="flex items-center gap-2 flex-shrink-0">
-                  <button 
-                    onClick={() => goToPhase(phaseNum)} 
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                      isActive 
-                        ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                        : isCompleted 
-                        ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' 
-                        : 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
-                    }`}
+                  <button
+                    onClick={() => goToPhase(phaseNum)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${isActive
+                        ? 'bg-blue-50 border-blue-200 text-blue-700'
+                        : isCompleted
+                          ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                          : 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
                     disabled={!isCompleted && phaseNum !== currentPhase}
                   >
                     {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
@@ -406,6 +399,7 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
           </div>
         </div>
       </div>
+
       {/* Main Content Area */}
       <div className="container mx-auto px-6 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
@@ -420,7 +414,7 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
                 {/* Default test cases/examples */}
                 <div className="mt-6">
                   <h4 className="font-semibold mb-3 text-sm">Examples:</h4>
-                  {(problem.defaultTestCases as TestCase[] || []).map((tc, index) => (
+                  {(problem.defaultTestCases as TestCase[])?.map((tc, index) => (
                     <div key={index} className="mb-4 p-3 bg-slate-50 rounded-lg">
                       <p className="font-medium text-sm mb-2">Example {index + 1}:</p>
                       <div className="font-mono text-xs space-y-1">
@@ -433,64 +427,124 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
               </CardContent>
             </Card>
           </div>
+
           {/* Right Panel: Dynamic Phase Content */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Phase 1 */}
             {currentPhase === 1 && (
-              <Phase1
-                understanding={understanding}
-                setUnderstanding={setUnderstanding}
-                isLoading={isPhase1Loading}
-                feedback={phase1Feedback}
-                handleSubmit={handlePhase1Submit}
-              />
+              <Card>
+                <CardHeader><CardTitle>Phase 1: Understand the Problem</CardTitle></CardHeader>
+                <CardContent>
+                  <form onSubmit={handlePhase1Submit} className="space-y-4">
+                    <Textarea
+                      placeholder="Explain the inputs, outputs, and constraints..."
+                      className="min-h-[200px]"
+                      value={understanding}
+                      onChange={(e) => setUnderstanding(e.target.value)}
+                    />
+                    <Button type="submit" disabled={isPhase1Loading} className="w-full">
+                      {isPhase1Loading ? 'Evaluating...' : 'Submit Explanation'}
+                    </Button>
+                  </form>
+                  {phase1Feedback && (
+                    <Alert className="mt-4">
+                      <AlertDescription>{phase1Feedback}</AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             )}
+
+            {/* Phase 2 */}
             {currentPhase === 2 && (
-              <Phase2
-                testCases={testCases}
-                currentInput={currentInput}
-                setCurrentInput={setCurrentInput}
-                currentOutput={currentOutput}
-                setCurrentOutput={setCurrentOutput}
-                handleAddTestCase={handleAddTestCase}
-                handleRemoveTestCase={handleRemoveTestCase}
-                isLoading={isPhase2Loading}
-                feedback={phase2Feedback?.feedback || ""}
-                handleSubmit={handlePhase2Submit}
-              />
+              <Card>
+                <CardHeader><CardTitle>Phase 2: Create Custom Test Cases</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="space-y-2 mb-4">
+                    {testCases.map((tc, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-secondary rounded-md">
+                        <div className="flex-1 text-sm font-mono">Input: {tc.input} | Output: {tc.output}</div>
+                        <Button variant="ghost" size="icon" onClick={() => handleRemoveTestCase(i)}>
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Input"
+                      value={currentInput}
+                      onChange={e => setCurrentInput(e.target.value)}
+                    />
+                    <Input
+                      placeholder="Output"
+                      value={currentOutput}
+                      onChange={e => setCurrentOutput(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleAddTestCase} variant="outline" className="mt-2 w-full">
+                    Add Test Case
+                  </Button>
+                  <Separator className="my-4" />
+                  <Button
+                    onClick={handlePhase2Submit}
+                    className="w-full"
+                    disabled={testCases.length === 0 || isPhase2Loading}
+                  >
+                    {isPhase2Loading ? 'Evaluating...' : 'Submit Test Cases'}
+                  </Button>
+                  {phase2Feedback && (
+                    <Alert className="mt-4">
+                      <AlertDescription>{phase2Feedback.feedback}</AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             )}
+
+            {/* Phase 3 */}
             {currentPhase === 3 && (
-              <Phase3
-                algorithmText={algorithmText}
-                setAlgorithmText={setAlgorithmText}
-                isLoading={isPhase3Loading}
-                feedback={phase3Feedback}
-                handleSubmit={handlePhase3Submit}
-              />
+              <Card>
+                <CardHeader><CardTitle>Phase 3: Design the Algorithm</CardTitle></CardHeader>
+                <CardContent>
+                  <form onSubmit={handlePhase3Submit} className="space-y-4">
+                    <Textarea
+                      placeholder="1. Initialize a hash map..."
+                      className="min-h-[250px]"
+                      value={algorithmText}
+                      onChange={(e) => setAlgorithmText(e.target.value)}
+                    />
+                    <Button type="submit" disabled={isPhase3Loading} className="w-full">
+                      {isPhase3Loading ? 'Evaluating...' : 'Submit Algorithm'}
+                    </Button>
+                  </form>
+                  {phase3Feedback && (
+                    <Alert className="mt-4">
+                      <AlertDescription>{phase3Feedback}</AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             )}
+
+            {/* Enhanced Phase 4 */}
             {currentPhase === 4 && (
-              <Phase4
-                language={language}
-                setLanguage={setLanguage}
-                code={code}
-                setCode={setCode}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                customInput={customInput}
-                setCustomInput={setCustomInput}
-                runCode={runCode}
-                runCustomTest={runCustomTest}
-                submitSolution={submitSolution}
-                resetCode={resetCode}
-                isRunning={isRunning}
-                isExecuting={isExecuting}
-                testResults={testResults}
-              />
-            )}
+            <EnhancedPhase4
+              problem={problem}
+              language={language}
+              setLanguage={setLanguage}
+              code={code}
+              setCode={setCode}
+              testCases={testCases} // Pass down the custom test cases from Phase 2
+              markPhaseCompleted={markPhaseCompleted}
+              initialSubmission={initialSubmission}
+            />)}
+            
             {/* Navigation Buttons */}
             <div className="flex justify-between items-center mt-6">
-              <Button 
-                variant="outline" 
-                onClick={goToPreviousPhase} 
+              <Button
+                variant="outline"
+                onClick={goToPreviousPhase}
                 disabled={currentPhase === 1}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" /> Previous

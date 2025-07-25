@@ -26,12 +26,24 @@ model User {
 }
 
 // Problem model for the DSA questions
+// file: prisma/schema.prisma
+
 model Problem {
   id              Int           @id @default(autoincrement())
   title           String
   description     String
   difficulty      Difficulty    @default(MEDIUM)
-  tags            String[]      // e.g., ["arrays", "dynamic-programming"]
+  tags            String[]
+
+  // Add these two new fields
+  defaultTestCases Json?
+  codeScaffold     Json?
+
+  // Add these new fields
+  constraints      String[]
+  hints            String[]
+  functionName     String?
+
   submissions     Submission[]
   createdAt       DateTime      @default(now())
 }

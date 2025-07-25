@@ -1,7 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import type { Problem } from '@prisma/client';
+import { useState, useEffect } from 'react';
+// Extend Problem type locally to include codeScaffold and defaultTestCases
+type Problem = {
+  id: number;
+  title: string;
+  description: string;
+  difficulty: string;
+  codeScaffold?: Record<string, string>;
+  defaultTestCases?: TestCase[];
+};
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,8 +82,20 @@ export default function ProblemInterface({ problem }: { problem: Problem }) {
   const [isPhase3Loading, setIsPhase3Loading] = useState(false);
 
   // --- Phase 4 State ---
-  const [code, setCode] = useState('# Write your code here...');
   const [language, setLanguage] = useState('python');
+  const [code, setCode] = useState('# Write your code here...');
+  // Set initial code from scaffold when problem or language changes
+  useEffect(() => {
+    if (
+      problem.codeScaffold &&
+      typeof problem.codeScaffold === 'object' &&
+      typeof (problem.codeScaffold as Record<string, string>)[language] === 'string'
+    ) {
+      setCode((problem.codeScaffold as Record<string, string>)[language]);
+    } else {
+      setCode('# Write your code here...');
+    }
+  }, [problem, language]);
   const [isExecuting, setIsExecuting] = useState(false);
   // New: Store results for each test case run
   type RunResult = {
@@ -178,8 +198,12 @@ export default function ProblemInterface({ problem }: { problem: Problem }) {
     setIsExecuting(true);
     setRunResults([]);
 
-    // Create an array of promises, one for each test case
-    const executionPromises = testCases.map(tc =>
+    // Combine default and custom test cases
+    const allTestCases = Array.isArray(problem.defaultTestCases)
+      ? [...problem.defaultTestCases, ...testCases]
+      : [...testCases];
+
+    const executionPromises = allTestCases.map(tc =>
       fetch('/api/submission/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -192,7 +216,7 @@ export default function ProblemInterface({ problem }: { problem: Problem }) {
 
     // Process the results
     const processedResults = results.map((result, index) => {
-      const testCase = testCases[index];
+      const testCase = allTestCases[index];
       const actualOutput = (result.stdout || "").trim();
       const expectedOutput = testCase.output.trim();
       return {
@@ -258,7 +282,20 @@ export default function ProblemInterface({ problem }: { problem: Problem }) {
           <div className="lg:col-span-1">
             <Card className="sticky top-48 shadow-sm">
               <CardHeader><CardTitle>Problem Statement</CardTitle></CardHeader>
-              <CardContent><p className="whitespace-pre-wrap">{problem.description}</p></CardContent>
+              <CardContent>
+                <p className="whitespace-pre-wrap">{problem.description}</p>
+                {/* Default test cases/examples */}
+                <div className="mt-6">
+                  <h4 className="font-semibold mb-2">Examples</h4>
+                  {(problem.defaultTestCases as TestCase[])?.map((tc, index) => (
+                    <div key={index} className="text-sm p-3 bg-secondary rounded-md font-mono mb-2">
+                      <p className="font-semibold">Example {index + 1}:</p>
+                      <p>Input: {tc.input}</p>
+                      <p>Output: {tc.output}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
             </Card>
           </div>
 
@@ -281,7 +318,7 @@ export default function ProblemInterface({ problem }: { problem: Problem }) {
             {/* Phase 2 */}
             {currentPhase === 2 && (
               <Card>
-                <CardHeader><CardTitle>Phase 2: Create Test Cases</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Phase 2: Create Custom Test Cases</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-2 mb-4">
                     {testCases.map((tc, i) => (

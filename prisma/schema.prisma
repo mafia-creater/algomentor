@@ -35,16 +35,27 @@ model Problem {
   difficulty       Difficulty    @default(MEDIUM)
   tags             String[]
   
-  // Essential for the enhanced editor
-  defaultTestCases Json?         // Array of {input: string, output: string, explanation?: string}
-  codeScaffold     Json?         // Object with language keys: {python: "def solution():", javascript: "function solution() {"}
+  // Test cases structure for enhanced functionality
+  defaultTestCases Json?         // Public test cases shown in problem description
+  hiddenTestCases  Json?         // Hidden test cases used only during submission
+  allTestCases     Json?         // Combined test cases for internal use
+  
+  // Code scaffold and execution details
+  codeScaffold     Json?         // Object with language keys
   functionName     String?       // Name of the main function to call
   constraints      String[]
   hints            String[]
   
+  // Submission tracking
   submissions      Submission[]
+  totalSubmissions Int           @default(0)
+  acceptedSubmissions Int        @default(0)
+  acceptanceRate   Float?        // Calculated field
+  
   createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
+
 
 // Enum for problem difficulty levels
 enum Difficulty {

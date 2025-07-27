@@ -1,4 +1,4 @@
-// Enhanced Phase 4 Component with LeetCode-like functionality
+// Enhanced Phase 4 Component with proper hidden test case handling
 "use client";
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,9 @@ import {
   AlertCircle,
   Loader2,
   Eye,
-  EyeOff
+  EyeOff,
+  Shield,
+  Target
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 
@@ -27,7 +29,10 @@ type TestCase = {
   input: string;
   output: string;
   explanation?: string;
-  isHidden?: boolean;
+  isHidden: boolean;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  timeLimit?: number;
+  memoryLimit?: number;
 };
 
 type ExecutionResult = {
@@ -52,18 +57,28 @@ type TestResult = {
   memoryUsed: number;
   index: number;
   error?: string;
-  isHidden?: boolean;
+  isHidden: boolean;
 };
 
 type SubmissionResult = {
   status: 'accepted' | 'wrong_answer' | 'runtime_error' | 'time_limit_exceeded' | 'compilation_error' | 'system_error';
   totalTests: number;
+  publicTests: number;
+  hiddenTests: number;
+  passedPublic: number;
+  passedHidden: number;
   passedTests: number;
   failedTestIndex?: number;
+  failedTestType?: 'public' | 'hidden';
   runtime: number;
   memory: number;
   testResults?: TestResult[];
   message?: string;
+  acceptanceDetails?: {
+    publicAccepted: boolean;
+    hiddenAccepted: boolean;
+    firstFailedHidden?: number;
+  };
 };
 
 const LANGUAGE_CONFIG = {
@@ -102,18 +117,16 @@ interface Phase4Props {
   setLanguage: (lang: string) => void;
   code: string;
   setCode: (code: string) => void;
-  testCases: TestCase[];
   markPhaseCompleted: (phase: number) => void;
   initialSubmission?: any;
 }
 
-export default function EnhancedPhase4({ 
+export default function EnhancedPhase4WithHiddenTests({ 
   problem, 
   language, 
   setLanguage, 
   code, 
   setCode, 
-  testCases, 
   markPhaseCompleted,
   initialSubmission 
 }: Phase4Props) {
@@ -126,16 +139,29 @@ export default function EnhancedPhase4({
   const [customOutput, setCustomOutput] = useState('');
   const [showHiddenTests, setShowHiddenTests] = useState(false);
 
-  // Get example test cases (visible ones) from problem description
-  const getExampleTestCases = (): TestCase[] => {
-    return (problem.defaultTestCases as TestCase[]) || [];
+  // Get public test cases (shown during "Run")
+  const getPublicTestCases = (): TestCase[] => {
+    const publicTests = problem.defaultTestCases || [];
+    return publicTests.map((test: any) => ({
+      ...test,
+      isHidden: false
+    }));
   };
 
-  // Get all test cases for submission (examples + additional hidden tests)
+  // Get hidden test cases (used only during submission)
+  const getHiddenTestCases = (): TestCase[] => {
+    const hiddenTests = problem.hiddenTestCases || [];
+    return hiddenTests.map((test: any) => ({
+      ...test,
+      isHidden: true
+    }));
+  };
+
+  // Get all test cases for submission
   const getAllTestCases = (): TestCase[] => {
-    const examples = getExampleTestCases();
-    const additionalTests = testCases.filter(tc => !examples.some(ex => ex.input === tc.input && ex.output === tc.output));
-    return [...examples, ...additionalTests];
+    const publicTests = getPublicTestCases();
+    const hiddenTests = getHiddenTestCases();
+    return [...publicTests, ...hiddenTests];
   };
 
   // Reset code to scaffold
@@ -166,7 +192,9 @@ export default function EnhancedPhase4({
               language,
               code,
               stdin: testCase.input,
-              functionName: problem.functionName
+              functionName: problem.functionName,
+              timeLimit: testCase.timeLimit,
+              memoryLimit: testCase.memoryLimit
             })
           });
           
@@ -229,28 +257,28 @@ export default function EnhancedPhase4({
     return results;
   };
 
-  // Run code against example test cases only
+  // Run code against public test cases only
   const runCode = async () => {
     setIsRunning(true);
     setTestResults([]);
     setSubmissionResult(null);
     setActiveTab('result');
     
-    const exampleTests = getExampleTestCases();
-    if (exampleTests.length === 0) {
+    const publicTests = getPublicTestCases();
+    if (publicTests.length === 0) {
       setTestResults([]);
       setIsRunning(false);
       return;
     }
     
     try {
-      const results = await executeTestCases(exampleTests, false);
+      const results = await executeTestCases(publicTests, false);
       setTestResults(results);
       
     } catch (error) {
       console.error('Execution error:', error);
       setTestResults([{
-        testCase: { input: '', output: '', explanation: '' },
+        testCase: { input: '', output: '', isHidden: false },
         result: {
           stdout: '',
           stderr: error instanceof Error ? error.message : 'System error occurred',
@@ -263,14 +291,15 @@ export default function EnhancedPhase4({
         executionTime: 0,
         memoryUsed: 0,
         index: 1,
-        error: error instanceof Error ? error.message : 'System error occurred'
+        error: error instanceof Error ? error.message : 'System error occurred',
+        isHidden: false
       }]);
     } finally {
       setIsRunning(false);
     }
   };
 
-  // Submit solution (run against all test cases)
+  // Submit solution (run against all test cases including hidden)
   const submitSolution = async () => {
     setIsSubmitting(true);
     setTestResults([]);
@@ -278,18 +307,27 @@ export default function EnhancedPhase4({
     setActiveTab('result');
     
     const allTests = getAllTestCases();
+    const publicTests = getPublicTestCases();
+    const hiddenTests = getHiddenTestCases();
     
     try {
       const results = await executeTestCases(allTests, true);
       
-      // Calculate submission statistics
-      const passedTests = results.filter(r => r.isCorrect).length;
+      // Separate results by type
+      const publicResults = results.slice(0, publicTests.length);
+      const hiddenResults = results.slice(publicTests.length);
+      
+      // Calculate statistics
+      const passedPublic = publicResults.filter(r => r.isCorrect).length;
+      const passedHidden = hiddenResults.filter(r => r.isCorrect).length;
+      const passedTests = passedPublic + passedHidden;
       const totalTime = results.reduce((sum, r) => sum + r.executionTime, 0);
       const maxMemory = Math.max(...results.map(r => r.memoryUsed));
       
       // Determine submission status
       let status: SubmissionResult['status'] = 'accepted';
       let failedTestIndex: number | undefined;
+      let failedTestType: 'public' | 'hidden' | undefined;
       let message: string | undefined;
       
       // Check for compilation errors first
@@ -301,48 +339,86 @@ export default function EnhancedPhase4({
         status = 'compilation_error';
         message = 'Compilation Error';
       } else {
-        // Find first failed test
-        const firstFailedTest = results.find(r => !r.isCorrect);
+        // Check public test cases first
+        const firstFailedPublic = publicResults.find(r => !r.isCorrect);
         
-        if (firstFailedTest) {
-          failedTestIndex = firstFailedTest.index;
+        if (firstFailedPublic) {
+          failedTestIndex = firstFailedPublic.index;
+          failedTestType = 'public';
           
-          if (firstFailedTest.result.status.id === 5) {
+          if (firstFailedPublic.result.status.id === 5) {
             status = 'time_limit_exceeded';
-            message = 'Time Limit Exceeded';
-          } else if (firstFailedTest.result.status.id >= 7) {
+            message = 'Time Limit Exceeded on Public Test';
+          } else if (firstFailedPublic.result.status.id >= 7) {
             status = 'runtime_error';
-            message = 'Runtime Error';
-          } else if (firstFailedTest.result.status.id === 6) {
-            status = 'compilation_error';
-            message = 'Compilation Error';
+            message = 'Runtime Error on Public Test';
           } else {
             status = 'wrong_answer';
-            message = `Wrong Answer - Failed on test case ${failedTestIndex}`;
+            message = `Wrong Answer - Failed on public test case ${failedTestIndex}`;
           }
         } else {
-          // All tests passed
-          status = 'accepted';
-          message = 'Accepted';
-          markPhaseCompleted(4);
+          // All public tests passed, check hidden tests
+          const firstFailedHidden = hiddenResults.find(r => !r.isCorrect);
+          
+          if (firstFailedHidden) {
+            failedTestIndex = firstFailedHidden.index + publicTests.length;
+            failedTestType = 'hidden';
+            
+            if (firstFailedHidden.result.status.id === 5) {
+              status = 'time_limit_exceeded';
+              message = 'Time Limit Exceeded on Hidden Test';
+            } else if (firstFailedHidden.result.status.id >= 7) {
+              status = 'runtime_error';
+              message = 'Runtime Error on Hidden Test';
+            } else {
+              status = 'wrong_answer';
+              message = `Wrong Answer - Failed on hidden test case`;
+            }
+          } else {
+            // All tests passed!
+            status = 'accepted';
+            message = 'Accepted! All test cases passed.';
+            markPhaseCompleted(4);
+          }
         }
       }
       
       const submissionResult: SubmissionResult = {
         status,
         totalTests: allTests.length,
+        publicTests: publicTests.length,
+        hiddenTests: hiddenTests.length,
+        passedPublic,
+        passedHidden,
         passedTests,
         failedTestIndex,
+        failedTestType,
         runtime: totalTime,
         memory: maxMemory,
         testResults: results,
-        message
+        message,
+        acceptanceDetails: {
+          publicAccepted: passedPublic === publicTests.length,
+          hiddenAccepted: passedHidden === hiddenTests.length,
+          firstFailedHidden: failedTestType === 'hidden' ? failedTestIndex : undefined
+        }
       };
       
       setSubmissionResult(submissionResult);
       
-      // For display, show results up to first failure (or all if accepted)
-      const displayResults = status === 'accepted' ? results : results.slice(0, (failedTestIndex || results.length));
+      // For display, show all public results + limited hidden results
+      // Show hidden results only up to first failure or first few if all pass
+      let displayResults = [...publicResults];
+      
+      if (status === 'accepted') {
+        // Show first 2-3 hidden test results when accepted
+        displayResults = [...displayResults, ...hiddenResults.slice(0, 3)];
+      } else if (failedTestType === 'hidden') {
+        // Show hidden results up to the first failure
+        const failedHiddenIndex = hiddenResults.findIndex(r => !r.isCorrect);
+        displayResults = [...displayResults, ...hiddenResults.slice(0, failedHiddenIndex + 1)];
+      }
+      
       setTestResults(displayResults);
       
     } catch (error) {
@@ -350,6 +426,10 @@ export default function EnhancedPhase4({
       setSubmissionResult({
         status: 'system_error',
         totalTests: allTests.length,
+        publicTests: publicTests.length,
+        hiddenTests: hiddenTests.length,
+        passedPublic: 0,
+        passedHidden: 0,
         passedTests: 0,
         runtime: 0,
         memory: 0,
@@ -405,14 +485,35 @@ export default function EnhancedPhase4({
           <div className="flex items-center justify-between">
             <CardTitle>Phase 4: Code the Solution</CardTitle>
             {submissionResult && (
-              <Badge className={getStatusColor(submissionResult.status)}>
-                {submissionResult.status === 'accepted' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                {submissionResult.status !== 'accepted' && <XCircle className="h-3 w-3 mr-1" />}
-                {submissionResult.message}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge className={getStatusColor(submissionResult.status)}>
+                  {submissionResult.status === 'accepted' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                  {submissionResult.status !== 'accepted' && <XCircle className="h-3 w-3 mr-1" />}
+                  {submissionResult.message}
+                </Badge>
+                {submissionResult.acceptanceDetails && (
+                  <div className="text-xs text-gray-600">
+                    Public: {submissionResult.passedPublic}/{submissionResult.publicTests} | 
+                    Hidden: {submissionResult.passedHidden}/{submissionResult.hiddenTests}
+                  </div>
+                )}
+              </div>
             )}
           </div>
+          
+          {/* Test case summary */}
+          <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-1">
+              <Target className="h-4 w-4" />
+              <span>{getPublicTestCases().length} Public Test Cases</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Shield className="h-4 w-4" />
+              <span>{getHiddenTestCases().length} Hidden Test Cases</span>
+            </div>
+          </div>
         </CardHeader>
+        
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
@@ -486,7 +587,7 @@ export default function EnhancedPhase4({
             </TabsContent>
 
             <TabsContent value="result" className="space-y-4">
-              {/* Submission Summary */}
+              {/* Enhanced Submission Summary */}
               {submissionResult && (
                 <Card>
                   <CardContent className="pt-6">
@@ -496,50 +597,96 @@ export default function EnhancedPhase4({
                       }`}>
                         {submissionResult.message}
                       </div>
-                      {submissionResult.status !== 'accepted' && submissionResult.failedTestIndex && (
+                      
+                      {submissionResult.status !== 'accepted' && (
                         <div className="text-sm text-gray-600 mt-1">
-                          Failed on test case {submissionResult.failedTestIndex}
+                          {submissionResult.failedTestType === 'public' 
+                            ? `Failed on public test case ${submissionResult.failedTestIndex}`
+                            : 'Failed on hidden test case'
+                          }
                         </div>
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                    {/* Detailed Stats Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
                       <div>
-                        <div className="text-2xl font-bold text-green-600">{submissionResult.passedTests}</div>
-                        <div className="text-sm text-gray-600">Passed</div>
+                        <div className="text-lg font-bold text-green-600">{submissionResult.passedPublic}</div>
+                        <div className="text-xs text-gray-600">Public Passed</div>
                       </div>
                       <div>
-                        <div className="text-2xl font-bold text-gray-900">{submissionResult.totalTests}</div>
-                        <div className="text-sm text-gray-600">Total</div>
+                        <div className="text-lg font-bold text-blue-600">{submissionResult.publicTests}</div>
+                        <div className="text-xs text-gray-600">Public Total</div>
                       </div>
                       <div>
-                        <div className="text-2xl font-bold text-blue-600">{submissionResult.runtime.toFixed(3)}s</div>
-                        <div className="text-sm text-gray-600">Runtime</div>
+                        <div className="text-lg font-bold text-green-600">{submissionResult.passedHidden}</div>
+                        <div className="text-xs text-gray-600">Hidden Passed</div>
                       </div>
                       <div>
-                        <div className="text-2xl font-bold text-purple-600">{(submissionResult.memory / 1024).toFixed(1)}KB</div>
-                        <div className="text-sm text-gray-600">Memory</div>
+                        <div className="text-lg font-bold text-purple-600">{submissionResult.hiddenTests}</div>
+                        <div className="text-xs text-gray-600">Hidden Total</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-bold text-blue-600">{submissionResult.runtime.toFixed(3)}s</div>
+                        <div className="text-xs text-gray-600">Runtime</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-bold text-orange-600">{(submissionResult.memory / 1024).toFixed(1)}KB</div>
+                        <div className="text-xs text-gray-600">Memory</div>
+                      </div>
+                    </div>
+
+                    {/* Progress bars for test completion */}
+                    <div className="mt-4 space-y-2">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Public Tests</span>
+                          <span>{submissionResult.passedPublic}/{submissionResult.publicTests}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-green-600 h-2 rounded-full" 
+                            style={{ width: `${(submissionResult.passedPublic / submissionResult.publicTests) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Hidden Tests</span>
+                          <span>{submissionResult.passedHidden}/{submissionResult.hiddenTests}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-purple-600 h-2 rounded-full" 
+                            style={{ width: `${(submissionResult.passedHidden / submissionResult.hiddenTests) * 100}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               )}
 
-              {/* Test Results */}
+              {/* Test Results with proper hidden/public separation */}
               {testResults.length > 0 && (
                 <>
-                  {submissionResult && submissionResult.testResults && submissionResult.testResults.some(r => r.isHidden) && (
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-600">
-                        Some test cases are hidden during submission
+                  {submissionResult && submissionResult.hiddenTests > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Shield className="h-4 w-4 text-blue-600" />
+                        <span className="text-blue-800">
+                          Some test cases are hidden during submission. Only failed hidden tests or sample results are shown.
+                        </span>
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setShowHiddenTests(!showHiddenTests)}
+                        className="text-blue-600 border-blue-200"
                       >
                         {showHiddenTests ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-                        {showHiddenTests ? 'Hide' : 'Show'} Hidden Tests
+                        {showHiddenTests ? 'Hide Details' : 'Show Details'}
                       </Button>
                     </div>
                   )}
@@ -548,46 +695,94 @@ export default function EnhancedPhase4({
                     {testResults
                       .filter(result => !result.isHidden || showHiddenTests)
                       .map((testResult, index) => (
-                      <Card key={index} className="border-l-4 border-l-transparent">
+                      <Card key={index} className={`border-l-4 ${
+                        testResult.isHidden 
+                          ? 'border-l-purple-400 bg-purple-50/30' 
+                          : 'border-l-blue-400'
+                      }`}>
                         <CardContent className="pt-4">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               {getStatusIcon(testResult.result.status.description, testResult.isCorrect)}
                               <span className="font-medium">
-                                Test Case {testResult.index}
-                                {testResult.isHidden && <Badge variant="outline" className="ml-2 text-xs">Hidden</Badge>}
+                                {testResult.isHidden ? 'Hidden' : 'Public'} Test Case {testResult.index}
                               </span>
+                              
+                              {testResult.isHidden && (
+                                <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
+                                  <Shield className="h-3 w-3 mr-1" />
+                                  Hidden
+                                </Badge>
+                              )}
+                              
                               <Badge className={getStatusColor(testResult.result.status.description)} variant="outline">
                                 {testResult.result.status.description}
                               </Badge>
+                              
+                              {testResult.testCase.difficulty && (
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${
+                                    testResult.testCase.difficulty === 'easy' ? 'text-green-600 border-green-300' :
+                                    testResult.testCase.difficulty === 'medium' ? 'text-yellow-600 border-yellow-300' :
+                                    'text-red-600 border-red-300'
+                                  }`}
+                                >
+                                  {testResult.testCase.difficulty}
+                                </Badge>
+                              )}
                             </div>
+                            
                             <div className="flex items-center gap-4 text-xs text-gray-600">
                               <div className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 {testResult.executionTime.toFixed(3)}s
+                                {testResult.testCase.timeLimit && (
+                                  <span className="text-gray-400">/{testResult.testCase.timeLimit}ms</span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1">
                                 <MemoryStick className="h-3 w-3" />
                                 {(testResult.memoryUsed / 1024).toFixed(1)}KB
+                                {testResult.testCase.memoryLimit && (
+                                  <span className="text-gray-400">/{(testResult.testCase.memoryLimit / 1024).toFixed(0)}KB</span>
+                                )}
                               </div>
                             </div>
                           </div>
 
-                          {!testResult.isHidden && (
+                          {/* Show test case details only for public tests or when explicitly requested */}
+                          {(!testResult.isHidden || showHiddenTests) && (
                             <div className="space-y-2 text-sm">
-                              <div>
-                                <span className="font-medium">Input:</span>
-                                <div className="font-mono bg-gray-50 p-2 rounded mt-1">
-                                  {testResult.testCase.input || 'No input'}
-                                </div>
-                              </div>
+                              {!testResult.isHidden && (
+                                <>
+                                  <div>
+                                    <span className="font-medium">Input:</span>
+                                    <div className="font-mono bg-gray-50 p-2 rounded mt-1">
+                                      {testResult.testCase.input || 'No input'}
+                                    </div>
+                                  </div>
+                                  
+                                  <div>
+                                    <span className="font-medium">Expected:</span>
+                                    <div className="font-mono bg-gray-50 p-2 rounded mt-1">
+                                      {testResult.testCase.output}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                               
-                              <div>
-                                <span className="font-medium">Expected:</span>
-                                <div className="font-mono bg-gray-50 p-2 rounded mt-1">
-                                  {testResult.testCase.output}
+                              {testResult.isHidden && showHiddenTests && (
+                                <div className="text-sm text-purple-700 bg-purple-100 p-2 rounded">
+                                  <Shield className="h-4 w-4 inline mr-1" />
+                                  Hidden test case details are not shown to prevent solution leakage.
+                                  {testResult.testCase.explanation && (
+                                    <div className="mt-1 text-xs">
+                                      Hint: {testResult.testCase.explanation}
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
+                              )}
                               
                               <div>
                                 <span className="font-medium">Your Output:</span>
@@ -606,12 +801,73 @@ export default function EnhancedPhase4({
                                   </div>
                                 </div>
                               )}
+
+                              {testResult.testCase.explanation && !testResult.isHidden && (
+                                <div>
+                                  <span className="font-medium text-blue-600">Explanation:</span>
+                                  <div className="text-sm text-gray-700 mt-1">
+                                    {testResult.testCase.explanation}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Compact view for hidden tests when not expanded */}
+                          {testResult.isHidden && !showHiddenTests && (
+                            <div className="text-sm">
+                              <div className="flex items-center justify-between p-2 bg-purple-100 rounded">
+                                <span className="text-purple-700">
+                                  {testResult.isCorrect ? '✓ Passed' : '✗ Failed'} - Details hidden
+                                </span>
+                                {!testResult.isCorrect && (
+                                  <Badge variant="outline" className="text-xs text-red-600 border-red-300">
+                                    This hidden test failed
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           )}
                         </CardContent>
                       </Card>
                     ))}
                   </div>
+
+                  {/* Summary for hidden tests that aren't shown */}
+                  {submissionResult && submissionResult.hiddenTests > 0 && (
+                    <Card className="border-purple-200 bg-purple-50/50">
+                      <CardContent className="pt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-5 w-5 text-purple-600" />
+                            <span className="font-medium text-purple-800">
+                              Hidden Test Summary
+                            </span>
+                          </div>
+                          <div className="text-sm text-purple-700">
+                            {submissionResult.passedHidden}/{submissionResult.hiddenTests} passed
+                          </div>
+                        </div>
+                        
+                        <div className="mt-2 text-sm text-purple-700">
+                          {submissionResult.passedHidden === submissionResult.hiddenTests ? (
+                            '🎉 All hidden test cases passed!'
+                          ) : (
+                            `${submissionResult.hiddenTests - submissionResult.passedHidden} hidden test case(s) failed. 
+                             These tests cover edge cases, performance requirements, and boundary conditions.`
+                          )}
+                        </div>
+                        
+                        {submissionResult.status !== 'accepted' && submissionResult.failedTestType === 'hidden' && (
+                          <div className="mt-2 p-2 bg-yellow-100 rounded text-sm text-yellow-800">
+                            <AlertCircle className="h-4 w-4 inline mr-1" />
+                            <strong>Tip:</strong> Your solution works for the public test cases but fails on hidden tests. 
+                            Consider edge cases, large inputs, or special conditions mentioned in the problem constraints.
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               )}
 
@@ -619,7 +875,23 @@ export default function EnhancedPhase4({
               {testResults.length === 0 && !isRunning && !isSubmitting && (
                 <div className="text-center py-8 text-gray-500">
                   <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <div>Run your code to see test results</div>
+                  <div className="text-lg font-medium mb-1">No Results Yet</div>
+                  <div className="text-sm">
+                    Click "Run" to test against public cases or "Submit" for full evaluation
+                  </div>
+                </div>
+              )}
+
+              {/* Loading states */}
+              {(isRunning || isSubmitting) && (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-blue-600" />
+                  <div className="text-lg font-medium mb-1">
+                    {isRunning ? 'Running Tests...' : 'Submitting Solution...'}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {isSubmitting && 'Testing against all cases including hidden tests'}
+                  </div>
                 </div>
               )}
             </TabsContent>
@@ -643,14 +915,16 @@ export default function EnhancedPhase4({
               disabled={isSubmitting || isRunning || !code.trim()}
               className="flex-1"
             >
-              <Send className="h-4 w-4 mr-2" />
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Submitting...
                 </>
               ) : (
-                'Submit'
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Submit
+                </>
               )}
             </Button>
             
@@ -665,10 +939,13 @@ export default function EnhancedPhase4({
             </Button>
           </div>
 
-          {/* Help text */}
-          <div className="mt-4 text-xs text-gray-500 space-y-1">
-            <div><strong>Run:</strong> Test your code against the example test cases shown in the problem description</div>
-            <div><strong>Submit:</strong> Submit your solution to be tested against all test cases (including hidden ones)</div>
+          {/* Enhanced Help text */}
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 space-y-1">
+            <div className="font-medium mb-2">How Testing Works:</div>
+            <div><strong>Run:</strong> Test your code against the {getPublicTestCases().length} public test cases shown in the problem description</div>
+            <div><strong>Submit:</strong> Full evaluation against {getAllTestCases().length} total test cases ({getPublicTestCases().length} public + {getHiddenTestCases().length} hidden)</div>
+            <div><strong>Hidden Tests:</strong> Cover edge cases, performance limits, and boundary conditions not visible during development</div>
+            <div className="text-amber-600"><strong>Note:</strong> You must pass ALL test cases (both public and hidden) to get accepted</div>
           </div>
         </CardContent>
       </Card>

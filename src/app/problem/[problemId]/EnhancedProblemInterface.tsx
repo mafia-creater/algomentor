@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Editor from '@monaco-editor/react';
-import EnhancedPhase4 from "./Phase4";
+import EnhancedPhase4WithHiddenTests from "./Phase4";
 
 type TestCase = {
   input: string;
@@ -527,18 +527,18 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
               </Card>
             )}
 
-            {/* Enhanced Phase 4 */}
+            {/* Enhanced Phase 4 with Hidden Test Handling */}
             {currentPhase === 4 && (
-            <EnhancedPhase4
-              problem={problem}
-              language={language}
-              setLanguage={setLanguage}
-              code={code}
-              setCode={setCode}
-              testCases={testCases} // Pass down the custom test cases from Phase 2
-              markPhaseCompleted={markPhaseCompleted}
-              initialSubmission={initialSubmission}
-            />)}
+              <EnhancedPhase4WithHiddenTests
+                problem={problem}
+                language={language}
+                setLanguage={setLanguage}
+                code={code}
+                setCode={setCode}
+                markPhaseCompleted={markPhaseCompleted}
+                initialSubmission={initialSubmission}
+              />
+            )}
             
             {/* Navigation Buttons */}
             <div className="flex justify-between items-center mt-6">

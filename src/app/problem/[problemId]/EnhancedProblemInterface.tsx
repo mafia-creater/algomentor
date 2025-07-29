@@ -114,21 +114,43 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
   const [activeTab, setActiveTab] = useState('code');
   const [customInput, setCustomInput] = useState('');
 
+  // --- Final Summary State ---
+  const [finalSummary, setFinalSummary] = useState<any>(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+
+  // Helper to extract code and language from initialSubmission.phase4_code
+  function getInitialCode(sub: Submission | null): string {
+    if (sub && sub.phase4_code && typeof sub.phase4_code === 'object' && 'code' in sub.phase4_code) {
+      // @ts-ignore
+      return typeof sub.phase4_code.code === 'string' ? sub.phase4_code.code : '';
+    }
+    return '';
+  }
+  function getInitialLanguage(sub: Submission | null): string {
+    if (sub && sub.phase4_code && typeof sub.phase4_code === 'object' && 'language' in sub.phase4_code) {
+      // @ts-ignore
+      return typeof sub.phase4_code.language === 'string' ? sub.phase4_code.language : 'python';
+    }
+    return 'python';
+  }
+
+  // Helper to safely get code scaffold for a language
+  function getCodeScaffold(scaffold: any, lang: string): string {
+    if (scaffold && typeof scaffold === 'object' && lang in scaffold) {
+      return typeof scaffold[lang] === 'string' ? scaffold[lang] : '';
+    }
+    return '';
+  }
+
   // Initialize code from scaffold when problem or language changes, or from initialSubmission
   useEffect(() => {
-    if (initialSubmission && typeof initialSubmission.code === 'string') {
-      setCode(initialSubmission.code);
-    } else if (
-      problem.codeScaffold &&
-      typeof problem.codeScaffold === 'object' &&
-      typeof (problem.codeScaffold as Record<string, string>)[language] === 'string'
-    ) {
-      setCode((problem.codeScaffold as Record<string, string>)[language]);
+    if (initialSubmission) {
+      setCode(getInitialCode(initialSubmission));
+      setLanguage(getInitialLanguage(initialSubmission));
+    } else if (problem.codeScaffold) {
+      setCode(getCodeScaffold(problem.codeScaffold, language));
     } else {
       setCode('# Write your code here...');
-    }
-    if (initialSubmission && typeof initialSubmission.language === 'string') {
-      setLanguage(initialSubmission.language);
     }
   }, [problem, language, initialSubmission]);
 
@@ -328,9 +350,22 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
   };
 
   const resetCode = () => {
-    if (problem.codeScaffold && typeof problem.codeScaffold === 'object' && problem.codeScaffold[language]) {
-      setCode(problem.codeScaffold[language]);
+    setCode(getCodeScaffold(problem.codeScaffold, language));
+  };
+
+  // --- Final Summary Handler ---
+  const handleGetFinalSummary = async () => {
+    setIsSummaryLoading(true);
+    const response = await fetch('/api/submission/phase6', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemId: problem.id }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      setFinalSummary(data);
     }
+    setIsSummaryLoading(false);
   };
 
   // --- Render ---
@@ -529,17 +564,63 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
 
             {/* Enhanced Phase 4 with Hidden Test Handling */}
             {currentPhase === 4 && (
-              <EnhancedPhase4WithHiddenTests
-                problem={problem}
-                language={language}
-                setLanguage={setLanguage}
-                code={code}
-                setCode={setCode}
-                markPhaseCompleted={markPhaseCompleted}
-                initialSubmission={initialSubmission}
-              />
+              <>
+                <EnhancedPhase4WithHiddenTests
+                  problem={problem}
+                  language={language}
+                  setLanguage={setLanguage}
+                  code={code}
+                  setCode={setCode}
+                  markPhaseCompleted={markPhaseCompleted}
+                  initialSubmission={initialSubmission}
+                />
+                {/* --- AI Complexity Analysis Card with Final Review Button --- */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI Complexity Analysis</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {/* ...existing complexity analysis display (if you want to show it here, add the relevant props/state)... */}
+                    <Button onClick={handleGetFinalSummary} disabled={isSummaryLoading} className="w-full mt-4">
+                      {isSummaryLoading ? 'Generating...' : 'Get My Final Review'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
             )}
             
+            {/* --- Final Summary Card (Phase 6) --- */}
+            {finalSummary && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    Problem Complete: Final Review
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div>
+                    <h4 className="font-semibold">Strengths</h4>
+                    <p className="text-gray-600 mt-1">{finalSummary.strengths}</p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold">Area for Improvement</h4>
+                    <p className="text-gray-600 mt-1">{finalSummary.improvementArea}</p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold">Suggested Problems to Practice Next</h4>
+                    <ul className="list-disc list-inside text-gray-600 mt-1">
+                      {finalSummary.suggestedProblems.map((p: string, i: number) => (
+                        <li key={i}>{p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Navigation Buttons */}
             <div className="flex justify-between items-center mt-6">
               <Button

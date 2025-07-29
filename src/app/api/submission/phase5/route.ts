@@ -37,20 +37,26 @@ export async function POST(req: Request) {
       "timeComplexity": "string",
       "timeExplanation": "string",
       "spaceComplexity": "string",
-      "spaceExplanation": "string",
       "optimizationHint": "string"
     }`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // Corrected model name
     const result = await model.generateContent(prompt);
-    const aiResult = JSON.parse(result.response.text());
+    
+    // --- THIS IS THE FIX ---
+    // Get the raw text from the AI's response
+    let aiResponseText = result.response.text();
+    // Clean the text by removing the Markdown fences and trim whitespace
+    aiResponseText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    // Now, parse the cleaned text
+    const aiResult = JSON.parse(aiResponseText);
+    // --- END OF FIX ---
 
     await prisma.submission.update({
       where: { userId_problemId: { userId: user.id, problemId } },
       data: {
-        phase4_code: { code, language }, // Save the final code
-        phase5_review: aiResult,
-        currentPhase: 6,
+        phase5_review: aiResult as any,
+        currentPhase: 5,
       },
     });
 

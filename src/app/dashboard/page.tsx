@@ -1,57 +1,36 @@
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import prisma from "@/lib/prisma"
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader"
+import { ProblemsTable } from "@/components/dashboard/ProblemsTable"
 
 // This page will be rendered on the server
 export default async function DashboardPage() {
   // 1. Fetch all problems from the database
-  const problems = await prisma.problem.findMany();
+  const problems = await prisma.problem.findMany({
+    select: {
+      id: true,
+      title: true,
+      difficulty: true,
+      tags: true,
+      totalSubmissions: true,
+      acceptanceRate: true,
+    },
+    orderBy: {
+      id: 'asc'
+    }
+  });
+
+  // Calculate stats for header
+  const stats = {
+    totalProblems: problems.length,
+    easyCount: problems.filter(p => p.difficulty === 'EASY').length,
+    mediumCount: problems.filter(p => p.difficulty === 'MEDIUM').length,
+    hardCount: problems.filter(p => p.difficulty === 'HARD').length,
+  }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Problem Dashboard</h1>
-      <Table>
-        <TableCaption>A list of available problems.</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Title</TableHead>
-            <TableHead>Difficulty</TableHead>
-            <TableHead>Tags</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {/* 2. Map over the problems and render a row for each one */}
-          {problems.map((problem) => (
-            <TableRow key={problem.id}>
-              <TableCell className="font-medium">{problem.title}</TableCell>
-              <TableCell>
-                <Badge 
-                  variant={
-                    problem.difficulty === 'EASY' ? 'default' :
-                    problem.difficulty === 'MEDIUM' ? 'secondary' :
-                    'destructive'
-                  }
-                >
-                  {problem.difficulty}
-                </Badge>
-              </TableCell>
-              <TableCell className="flex gap-2">
-                {problem.tags.map(tag => (
-                  <Badge key={tag} variant="outline">{tag}</Badge>
-                ))}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="container mx-auto p-6 max-w-7xl">
+      <DashboardHeader stats={stats} />
+      <ProblemsTable problems={problems} />
     </div>
   )
 }

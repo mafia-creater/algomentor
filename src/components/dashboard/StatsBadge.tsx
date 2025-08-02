@@ -14,7 +14,7 @@ export function StatsBadge({ acceptanceRate, totalSubmissions }: StatsBadgeProps
     )
   }
 
-  const rate = acceptanceRate || 0
+  const ratePercent = (acceptanceRate || 0) * 100;
   const getColor = (rate: number) => {
     if (rate >= 70) return 'bg-green-50 text-green-700 border-green-200'
     if (rate >= 40) return 'bg-yellow-50 text-yellow-700 border-yellow-200'
@@ -22,11 +22,11 @@ export function StatsBadge({ acceptanceRate, totalSubmissions }: StatsBadgeProps
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <Badge variant="outline" className={getColor(rate)}>
-        {rate.toFixed(1)}% accepted
+    <div className="flex flex-col gap-1 items-start">
+      <Badge variant="outline" className={getColor(ratePercent)}>
+        {ratePercent.toFixed(1)}% accepted
       </Badge>
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-gray-500 pl-1">
         {totalSubmissions} submission{totalSubmissions !== 1 ? 's' : ''}
       </span>
     </div>

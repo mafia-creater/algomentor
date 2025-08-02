@@ -65,6 +65,8 @@ export default function Navbar() {
               <div className="relative">
                 <UserButton 
                   afterSignOutUrl="/"
+                  userProfileUrl="/profile"
+                  userProfileMode="navigation"
                   appearance={{
                     elements: {
                       avatarBox: "ring-2 ring-gradient-to-r ring-blue-500/20 hover:ring-blue-500/40 transition-all duration-300"

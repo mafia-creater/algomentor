@@ -28,6 +28,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Editor from '@monaco-editor/react';
 import EnhancedPhase4WithHiddenTests from "./Phase4";
+import Phase1 from "./Phase1";
+import ProblemStatement from "./ProblemStatement";
+import Phase2 from "./Phase2";
+import Phase3 from "./Phase3";
 
 type TestCase = {
   input: string;
@@ -62,7 +66,7 @@ const LANGUAGE_CONFIG = {
   javascript: { id: 93, name: 'JavaScript', extension: 'js', monaco: 'javascript' },
   java: { id: 62, name: 'Java', extension: 'java', monaco: 'java' },
   cpp: { id: 54, name: 'C++', extension: 'cpp', monaco: 'cpp' },
-  typescript: { id: 94, name: 'TypeScript', extension: 'ts', monaco: 'typescript' }
+
 };
 
 const PHASE_CONFIG = {
@@ -142,17 +146,38 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
     return '';
   }
 
-  // Initialize code from scaffold when problem or language changes, or from initialSubmission
+  // Track if user has edited code to avoid overwriting on language change
+  const [userHasEdited, setUserHasEdited] = useState(false);
+
+  // Initialize code and language from initialSubmission or scaffold
   useEffect(() => {
     if (initialSubmission) {
       setCode(getInitialCode(initialSubmission));
       setLanguage(getInitialLanguage(initialSubmission));
+      setUserHasEdited(false);
     } else if (problem.codeScaffold) {
       setCode(getCodeScaffold(problem.codeScaffold, language));
+      setUserHasEdited(false);
     } else {
       setCode('# Write your code here...');
+      setUserHasEdited(false);
     }
-  }, [problem, language, initialSubmission]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [problem, initialSubmission]);
+
+  // Update code scaffold only if user hasn't started editing
+  useEffect(() => {
+    if (!userHasEdited && problem.codeScaffold) {
+      setCode(getCodeScaffold(problem.codeScaffold, language));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  // When user edits code, set flag
+  const handleCodeChange = (value: string | undefined) => {
+    setCode(value || '');
+    setUserHasEdited(true);
+  };
 
   // --- Navigation and State Logic ---
   const markPhaseCompleted = (phase: number) => {
@@ -261,14 +286,13 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
               language,
               code,
               stdin: testCase.input,
+              expectedOutput: testCase.output,
               functionName: problem.functionName
             })
           });
-
           const result = await response.json();
           const actualOutput = (result.stdout || '').trim();
           const expectedOutput = testCase.output.trim();
-
           return {
             testCase,
             result,
@@ -368,6 +392,18 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
     setIsSummaryLoading(false);
   };
 
+  function getFeedbackIcon(phase1Feedback: string) {
+    if (!phase1Feedback) return null;
+    const lower = phase1Feedback.toLowerCase();
+    if (lower.includes("good") || lower.includes("well done") || lower.includes("correct")) {
+      return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+    }
+    if (lower.includes("improve") || lower.includes("try again") || lower.includes("incorrect") || lower.includes("error")) {
+      return <XCircle className="h-5 w-5 text-red-500" />;
+    }
+    return <TestTube className="h-5 w-5 text-blue-500" />;
+  }
+
   // --- Render ---
   return (
     <div className="min-h-screen bg-slate-50">
@@ -439,127 +475,47 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
       <div className="container mx-auto px-6 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Panel: Problem Statement */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-48 shadow-sm">
-              <CardHeader><CardTitle>Problem Statement</CardTitle></CardHeader>
-              <CardContent>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {problem.description}
-                </div>
-                {/* Default test cases/examples */}
-                <div className="mt-6">
-                  <h4 className="font-semibold mb-3 text-sm">Examples:</h4>
-                  {(problem.defaultTestCases as TestCase[])?.map((tc, index) => (
-                    <div key={index} className="mb-4 p-3 bg-slate-50 rounded-lg">
-                      <p className="font-medium text-sm mb-2">Example {index + 1}:</p>
-                      <div className="font-mono text-xs space-y-1">
-                        <div><span className="font-semibold">Input:</span> {tc.input.replace(/\n/g, ', ')}</div>
-                        <div><span className="font-semibold">Output:</span> {tc.output}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <ProblemStatement problem={problem} />
 
           {/* Right Panel: Dynamic Phase Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Phase 1 */}
-            {currentPhase === 1 && (
-              <Card>
-                <CardHeader><CardTitle>Phase 1: Understand the Problem</CardTitle></CardHeader>
-                <CardContent>
-                  <form onSubmit={handlePhase1Submit} className="space-y-4">
-                    <Textarea
-                      placeholder="Explain the inputs, outputs, and constraints..."
-                      className="min-h-[200px]"
-                      value={understanding}
-                      onChange={(e) => setUnderstanding(e.target.value)}
-                    />
-                    <Button type="submit" disabled={isPhase1Loading} className="w-full">
-                      {isPhase1Loading ? 'Evaluating...' : 'Submit Explanation'}
-                    </Button>
-                  </form>
-                  {phase1Feedback && (
-                    <Alert className="mt-4">
-                      <AlertDescription>{phase1Feedback}</AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            {currentPhase === 1 && 
+              <Phase1
+                understanding={understanding}
+                setUnderstanding={setUnderstanding}
+                handleSubmit={handlePhase1Submit}
+                isLoading={isPhase1Loading}
+                feedback= {phase1Feedback}
+              />
+
+            }
 
             {/* Phase 2 */}
             {currentPhase === 2 && (
-              <Card>
-                <CardHeader><CardTitle>Phase 2: Create Custom Test Cases</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="space-y-2 mb-4">
-                    {testCases.map((tc, i) => (
-                      <div key={i} className="flex items-center gap-2 p-2 bg-secondary rounded-md">
-                        <div className="flex-1 text-sm font-mono">Input: {tc.input} | Output: {tc.output}</div>
-                        <Button variant="ghost" size="icon" onClick={() => handleRemoveTestCase(i)}>
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Input"
-                      value={currentInput}
-                      onChange={e => setCurrentInput(e.target.value)}
-                    />
-                    <Input
-                      placeholder="Output"
-                      value={currentOutput}
-                      onChange={e => setCurrentOutput(e.target.value)}
-                    />
-                  </div>
-                  <Button onClick={handleAddTestCase} variant="outline" className="mt-2 w-full">
-                    Add Test Case
-                  </Button>
-                  <Separator className="my-4" />
-                  <Button
-                    onClick={handlePhase2Submit}
-                    className="w-full"
-                    disabled={testCases.length === 0 || isPhase2Loading}
-                  >
-                    {isPhase2Loading ? 'Evaluating...' : 'Submit Test Cases'}
-                  </Button>
-                  {phase2Feedback && (
-                    <Alert className="mt-4">
-                      <AlertDescription>{phase2Feedback.feedback}</AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
+              <Phase2
+                testCases={testCases}
+                currentInput={currentInput}
+                setCurrentInput={setCurrentInput}
+                currentOutput={currentOutput}
+                setCurrentOutput={setCurrentOutput}
+                handleAddTestCase={handleAddTestCase}
+                handleRemoveTestCase={handleRemoveTestCase}
+                handleSubmit={handlePhase2Submit}
+                isLoading={isPhase2Loading}
+                feedback={phase2Feedback ? phase2Feedback.feedback : ''}
+              />
             )}
 
             {/* Phase 3 */}
             {currentPhase === 3 && (
-              <Card>
-                <CardHeader><CardTitle>Phase 3: Design the Algorithm</CardTitle></CardHeader>
-                <CardContent>
-                  <form onSubmit={handlePhase3Submit} className="space-y-4">
-                    <Textarea
-                      placeholder="1. Initialize a hash map..."
-                      className="min-h-[250px]"
-                      value={algorithmText}
-                      onChange={(e) => setAlgorithmText(e.target.value)}
-                    />
-                    <Button type="submit" disabled={isPhase3Loading} className="w-full">
-                      {isPhase3Loading ? 'Evaluating...' : 'Submit Algorithm'}
-                    </Button>
-                  </form>
-                  {phase3Feedback && (
-                    <Alert className="mt-4">
-                      <AlertDescription>{phase3Feedback}</AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
+              <Phase3
+                algorithmText={algorithmText}
+                setAlgorithmText={setAlgorithmText}
+                handleSubmit={handlePhase3Submit}
+                isLoading={isPhase3Loading}
+                feedback={phase3Feedback}
+              />
             )}
 
             {/* Enhanced Phase 4 with Hidden Test Handling */}

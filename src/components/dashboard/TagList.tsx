@@ -6,8 +6,8 @@ interface TagListProps {
 }
 
 export function TagList({ tags, maxTags = 3 }: TagListProps) {
-  const displayTags = maxTags ? tags.slice(0, maxTags) : tags
-  const remainingCount = tags.length - displayTags.length
+  const displayTags = maxTags ? tags.slice(0, maxTags) : tags;
+  const remainingCount = tags.length - displayTags.length;
 
   return (
     <div className="flex flex-wrap gap-1">
@@ -29,5 +29,5 @@ export function TagList({ tags, maxTags = 3 }: TagListProps) {
         </Badge>
       )}
     </div>
-  )
+  );
 }

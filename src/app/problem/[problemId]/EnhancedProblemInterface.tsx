@@ -64,9 +64,6 @@ type TestResult = {
 const LANGUAGE_CONFIG = {
   python: { id: 71, name: 'Python 3', extension: 'py', monaco: 'python' },
   javascript: { id: 93, name: 'JavaScript', extension: 'js', monaco: 'javascript' },
-  java: { id: 62, name: 'Java', extension: 'java', monaco: 'java' },
-  cpp: { id: 54, name: 'C++', extension: 'cpp', monaco: 'cpp' },
-
 };
 
 const PHASE_CONFIG = {

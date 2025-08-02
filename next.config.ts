@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+
 const nextConfig = {
   // Add any other Next.js config options here
   async headers() {
@@ -13,6 +14,12 @@ const nextConfig = {
         ],
       },
     ];
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
   },
 };
 

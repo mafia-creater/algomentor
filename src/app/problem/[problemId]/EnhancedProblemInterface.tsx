@@ -517,20 +517,29 @@ export default function EnhancedProblemInterface({ problem, initialSubmission }:
 
             {/* Enhanced Phase 4 with Hidden Test Handling */}
             {currentPhase === 4 && (
-              <Card className="p-8 flex flex-col items-center justify-center min-h-[300px]">
-                <CardHeader>
-                  <CardTitle>Coding Interface Maintenance</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col items-center">
-                  <div className="text-blue-700 font-semibold text-lg mb-2">
-                    🚧 Coming Soon!
-                  </div>
-                  <div className="text-gray-600 text-center">
-                    The coding interface is currently under maintenance.<br />
-                    Please check back soon to solve this phase!
-                  </div>
-                </CardContent>
-              </Card>
+              <>
+                <EnhancedPhase4WithHiddenTests
+                  problem={problem}
+                  language={language}
+                  setLanguage={setLanguage}
+                  code={code}
+                  setCode={setCode}
+                  markPhaseCompleted={markPhaseCompleted}
+                  initialSubmission={initialSubmission}
+                />
+                {/* --- AI Complexity Analysis Card with Final Review Button --- */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI Complexity Analysis</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {/* ...existing complexity analysis display (if you want to show it here, add the relevant props/state)... */}
+                    <Button onClick={handleGetFinalSummary} disabled={isSummaryLoading} className="w-full mt-4">
+                      {isSummaryLoading ? 'Generating...' : 'Get My Final Review'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
             )}
             
             {/* --- Final Summary Card (Phase 6) --- */}
